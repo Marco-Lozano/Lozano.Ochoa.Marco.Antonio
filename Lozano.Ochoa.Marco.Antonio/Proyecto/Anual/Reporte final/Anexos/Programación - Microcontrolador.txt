@@ -1,0 +1,136 @@
+#include "mbed.h"                     //Libreria de mbed para controlar el micro
+#include <ros.h>                      //Libreria para hacer funcionar ros en el micro
+#include <geometry_msgs/Twist.h>      //Libreria para mensajes de tipo twist
+#include <std_msgs/String.h>          //Libreria para mensajes de tipo string
+
+ros::NodeHandle  nh;       //Se nombra nh al nodo a utilizar             
+
+DigitalOut step(D2);       //Declaracion de los pines 
+DigitalOut dir(D5);        //como salida digital
+DigitalOut en(D8);         //que controlaran
+DigitalOut step1(D3);      //los drivers de los motores
+DigitalOut dir1(D6);
+DigitalOut step2(D4);
+DigitalOut dir2(D7);
+
+AnalogIn potbase(A0);     //Declaracion de los pines 
+AnalogIn potl1(A1);       //como entrada analogica
+AnalogIn potl2(A2);       //que haran las lecturas de los potenciometros
+
+std_msgs::String str_msg_dat;                       //Se nombra una variable de tipo string
+ros::Publisher pubmon("pubmon", &str_msg_dat);      //Se configura el nodo como publicador
+char bufdatos[50]= "";                              //Cadena de caracteres para el publicador
+
+float stepDelay = 0.0016;    //Se nombran las variables a utilizar 
+float angbase = 0;           //en el codigo y se inicializan o
+float angl1 = 0;             //establecen los valores de ellas
+float angl2 = 0;
+float angbasegrado = 0;
+float angl1grado = 0;
+float angl2grado = 0;
+
+void messageCb( const geometry_msgs::Twist& msg)     //Funcion para el nodo suscriptor
+{
+    angbase = potbase.read();         //Lectura del potenciometro de la base
+    angl1 = potl1.read();
+    angl2 = potl2.read();
+    angbasegrado = angbase *270;      //El valor se convierte a grados
+    angl1grado = angl1*270;
+    angl2grado = angl2*270;
+
+    int base = msg.angular.x;        //Se guarda en una variable el
+    int link1 = msg.angular.y;       //valor recibido por el mensaje
+    int link2 = msg.angular.z;       //de tipo twist
+    
+    if(base > 0 && base < 170) {              //Si el valor recibido esta dentro del rango
+        base = base * 9.3;                    //Conversion debido a la relacion de engranes del brazo
+        for (int x = 0; x < base; x++) {      //Ciclo para mandar el numero de pasos
+            step=1;                           //que se movera el motor base
+            dir=0;
+            en=0;
+            wait(stepDelay);                  //Retraso para ajustar la velocidad del motor
+            step=0;
+
+        }
+    }
+    if(base < 0 && base > -170) {             //Si el valor recibido es negativo 
+        base = base*-1;                       //el motor girara en sentido contrario
+        base = base * 9.3;
+        for (int x = 0; x < base; x++) {
+            step=1;
+            dir=1;
+            en=0;
+            wait(stepDelay);
+            step=0;
+        }
+    }
+    if(link1 > 0 && link1 < 170) {
+        link1 = link1 * 34.87;
+        for (int x = 0; x < link1; x++) {
+            step1=1;
+            dir1=0;
+            en=0;
+            wait(stepDelay);
+            step1=0;
+
+        }
+    }
+    if(link1 < 0 && link1 > -170) {
+        link1=link1*-1;
+        link1 = link1 * 34.87;
+        for (int x = 0; x < link1; x++) {
+            step1=1;
+            dir1=1;
+            en=0;
+            wait(stepDelay);
+            step1=0;
+        }
+    }
+    if(link2 > 0 && link2 <170) {
+        link2 = link2 * 27.9;
+        for (int x = 0; x < link2; x++) {
+            step2=1;
+            dir2=0;
+            en=0;
+            wait(stepDelay);
+            step2=0;
+
+        }
+    }
+    if(link2 < 0 && link2 > -170) {
+        link2 = link2*-1;
+        link2 = link2 * 27.9;
+        for (int x = 0; x < link2; x++) {
+            step2=1;
+            dir2=1;
+            en=0;
+            wait(stepDelay);
+            step2=0;
+        }
+    }
+}
+
+ros::Subscriber<geometry_msgs::Twist> sub("cmd_ang", messageCb);   //Declaracion del suscriptor
+
+int main()
+{
+    nh.initNode();              //Inicializacion del nodo
+    nh.subscribe(sub);          //Inicia la suscripcion de mensajes
+    nh.advertise(pubmon);       //Inicia la publicacion de mensajes
+
+    while (1) {
+        angbase = potbase.read();     //Lectura de los potenciometros
+        angl1 = potl1.read();
+        angl2 = potl2.read();
+        angbasegrado = angbase *270;  //Conversion a grados
+        angl1grado = angl1*270;
+        angl2grado = angl2*270;
+
+        sprintf(bufdatos,"Esl1: %0.2f -- Esl2: %0.2f -- Esl3: %0.2f",angbasegrado,angl1grado,angl2grado);
+        str_msg_dat.data = bufdatos;        //La conversion se guarda en la variable str_msg_dat
+        pubmon.publish( &str_msg_dat );     //La variable anterior se publica
+
+        nh.spinOnce();             //Instruccion para que el nodo repita el ciclo
+        wait_ms(1);                //Retraso de un segundo
+    }
+}
